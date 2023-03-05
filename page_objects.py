@@ -4,6 +4,11 @@ from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
 
 
+class InvalidBookDataException(Exception):
+    def __init__(self):
+        Exception.__init__(self, 'Book data is not entirely correct')
+
+
 class BookDoesNotExist(Exception):
     def __init__(self, isbn):
         Exception.__init__(self, f'Book with ISBN = {repr(isbn)} does not exist')
@@ -49,6 +54,14 @@ class HomePage(object):
         self.driver.find_element(*self.num_copies_input_by).send_keys(num_copies)
         time.sleep(5)
         self.driver.find_element(*self.save_button_by).click()
+        try:
+            self.driver.find_element(By.XPATH, '//*[text()=\'There are some errors. '
+                                               'Please check the inserted book data.\']')
+        except NoSuchElementException:
+            pass
+        else:
+            raise InvalidBookDataException
+        return True
 
     def search_book(self, isbn):
         self.driver.find_element(*self.search_button_by).click()
@@ -91,7 +104,8 @@ class HomePage(object):
         return books
 
     def is_book_on_table(self, isbn):
-        return any(book for book in self.get_registered_books() if book['isbn'] == isbn)
+        books = self.get_registered_books()
+        return any(book for book in books if book['isbn'] == isbn)
 
     def edit_book(self, isbn, name, author, num_pages, num_copies):
         for element in self.__get_registered_book_elements():
@@ -114,8 +128,11 @@ class HomePage(object):
 
     def delete_book(self, isbn):
         for element in self.__get_registered_book_elements():
-            if element.find_elements(By.TAG_NAME, 'td')[0].text == isbn:
-                element.find_elements(By.TAG_NAME, 'td')[5].find_element(By.XPATH, "//*[text()='Delete']").click()
-                return True
-
+            should_delete = element.find_elements(By.TAG_NAME, 'td')[0].text == isbn
+            if should_delete:
+                action_buttons = element.find_elements(By.TAG_NAME, 'button')
+                for button in action_buttons:
+                    if button.text == 'Delete':
+                        button.click()
+                        return True
         return False
